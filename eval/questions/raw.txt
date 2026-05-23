@@ -1,0 +1,15 @@
+# Cricket questions log
+# 
+# Every cricket question you naturally wonder about while working, watching, or thinking
+# goes here. No filtering. No formatting requirements. Just dump them.
+#
+# Examples of good entries:
+#   How does Bumrah's economy at the death compare to other Indian pacers in T20Is?
+#   Why does Kohli struggle against left-arm wrist spin in the powerplay?
+#   What's the average score on Chepauk in IPL day matches vs night matches?
+#   When chasing > 200 in T20Is, which teams have the best record?
+#   Has any bowler ever taken a hat-trick AND scored 50+ in the same match?
+#
+# These become the eval set for the agentic system in Months 5–6.
+# Aim: 100+ by end of Month 3, 500+ by end of Month 5.
+# ----------------------------------------------------------------

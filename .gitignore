@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — never commit raw data or large processed files
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Models and large artifacts
+*.pkl
+*.joblib
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+mlruns/
+
+# Secrets and config
+.env
+.env.local
+*.key
+*.pem
+config.local.*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Node (for the frontend later)
+node_modules/
+.next/
+out/
