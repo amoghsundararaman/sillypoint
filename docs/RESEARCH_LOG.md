@@ -42,3 +42,33 @@ This file is the daily diary of the project. Every working session adds at least
 - First model in MLflow: probably a LightGBM win-probability baseline (Month 2).
 
 ---
+## 2026-05-23 — Cricsheet ingestion: data acquired, schema designed
+
+**What I did:**
+- Implemented `sillypoint/ingestion/cricsheet.py` — downloader with provenance tracking (SHA-256 hash, download timestamp, file count) writing to `data/raw/cricsheet/<date>/`.
+- Downloaded the all-matches archive: 21,801 matches, 96.1 MB compressed → 3.3 GB extracted JSON. SHA-256 `63861209a8ed963020e99857a67b934925e011b1c670465ec70d59ed6abfa9ab`. This is the canonical snapshot for the paper.
+- Explored Cricsheet JSON structure hands-on: `meta` / `info` / `innings`. Innings → overs → deliveries nesting. Player registry maps short names ("PJ Cummins") to UUIDs ("ded9240e") — critical for disambiguation.
+- Picked canonical exploration match: 1529292, SRH vs PBKS, 2026-05-06, Hyderabad. SRH 235, PBKS chased to 202, SRH won by 33 runs. POM: Pat Cummins (captain, bowling).
+
+**What I decided:**
+- **Two-layer data model.** Layer 1: Pydantic models faithful to Cricsheet JSON (fail-loud on schema drift). Layer 2: flat per-delivery table written to Parquet, ~70 denormalized columns. One Parquet per match initially; combined file materialized later for queries.
+- **Delivery ID:** composite string `{match_id}-{innings_idx}-{over_idx}-{delivery_idx_in_over}`, plus all four components as separate columns. `delivery_idx_in_over` is the raw Cricsheet array position (always unique even with extras); `legal_ball_in_over` is a separate 1-6 counter for legal balls only.
+- **Indexing convention:** all integers 0-indexed in the data layer (matches Cricsheet source). UI/display layer adds 1 where human-friendly. Eliminates whole class of off-by-one bugs.
+- **Player identity:** UUID as canonical join key (`batter_id` from `registry.people`). Short name (`batter`) denormalized alongside for human readability. Separate `players` table for `short_name` → `display_name` mapping (e.g., "PJ Cummins" → "Pat Cummins", populated later).
+- **Maximum denormalization for state.** Every delivery row stores pre-state including: innings runs/wickets/balls, striker and non-striker runs/balls, partnership state, bowler state, chase context (target/runs-to-win/RRR for innings 1), phase tag, recent-momentum signals (last_ball_was_*, runs/wickets in last over). Storage cost acceptable in Parquet; query simplicity gain large.
+- **Phase column:** clean categorical `powerplay`/`middle`/`death`/`normal` based on fielding restrictions. NOT subdivided (kept clean for ML one-hot encoding). Nuance captured via additional columns: `balls_into_phase`, `overs_into_phase`, `is_phase_transition`. Separate `test_session` and `test_day` for Test matches, populated later.
+- **Enrichments (separate from parser, populated by enricher workers in later months):**
+  - Month 2: weather via Open-Meteo (free, no key, historical back to 2021 via ERA5 reanalysis archive). Geocode venue names via Nominatim. Compute dew-likelihood from temp + humidity (Magnus formula). Day/night via `astral` library + per-tournament default start times.
+  - Month 4: Cricinfo scraping for pitch report text (raw + LLM-extracted features), crowd attendance from news sources, structured bowler attributes (style/arm/pace category/spin type) from Cricinfo player profiles. Shot zone from commentary text.
+  - Static venue data hand-curated: capacity, boundary dimensions (short/long/straight in meters) for major venues.
+- **Deferred / not committed:**
+  - `crowd_noise_db` — column exists, nullable, no commitment to populate.
+  - Video-derived bowler biomechanics — deferred indefinitely. Reasoning: CrickFormer learns bowler tendencies implicitly via UUID embeddings; explicit biomechanics features not required for the foundation-model paper. Possible follow-up paper later.
+  - Shot type from video (CV pipeline) — deferred indefinitely; shot zone partially obtainable from Cricinfo commentary text instead.
+
+**Open questions / next:**
+- Write `sillypoint/ingestion/schema.py` (Pydantic Layer 1) and `sillypoint/ingestion/parser.py` (transformation to Layer 2). Verify SRH innings parses to 235 runs.
+- Then: scale parser to all 21,801 matches, write one Parquet per match into `data/processed/cricsheet/<date>/`.
+- After that: materialize combined Parquet for DuckDB queries.
+
+---

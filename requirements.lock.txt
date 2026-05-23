@@ -102,6 +102,7 @@ stack-data==0.6.3
 terminado==0.18.1
 tinycss2==1.4.0
 tornado==6.5.5
+tqdm==4.67.3
 traitlets==5.15.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
