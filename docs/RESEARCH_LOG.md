@@ -114,3 +114,24 @@ This file is the daily diary of the project. Every working session adds at least
 - Verify the materialized Parquet matches per-match Parquets by row count and key sums.
 
 ---
+## 2026-05-23 (continued) — First exploratory queries, three paper-relevant findings
+
+**What I did:**
+- Materialized combined Parquet: 141 MB, 11,177,175 rows.
+- Ran 16 SQL queries against it via DuckDB. All queries <600ms; most under 100ms.
+
+**Cricket findings to mine for the paper:**
+1. **Free-hit signal magnitude.** Free hits boost batter scoring by +62% runs/ball (1.689 vs 1.044) and +99% boundary rate (24.7% vs 12.4%). A foundation model that recovers this from raw events without the explicit flag is a concrete validation case.
+2. **Late-career Kohli power evolution.** 2008-2021 Kohli averaged ~25 sixes/year; 2023-2025 Kohli averages 40+. Temporal embeddings should capture this drift; another validation case.
+3. **Sample-size dominance in death bowling rankings.** Bumrah (1261 balls, 8.33 economy) is the most-tested death bowler vs Malinga (917, 7.83) vs Starc (315, 9.28). Naive economy ranking misleads; the paper should propose sample-weighted ranking.
+
+**Coverage caveats to document:**
+- Cricsheet pre-2002 is sparse. Lara's 400 (2004) is present; his 501* (1994) is not. Tendulkar's early career absent. Affects all-time rankings.
+- Some all-time records (Brian Lara 501*, Sachin Tendulkar's 100 international centuries) cannot be queried from this snapshot.
+
+**Open questions / next:**
+- Build `players` enricher: scrape Cricinfo to populate full names, country, role, bowling/batting style per UUID.
+- Geocode venues for the Open-Meteo weather enricher.
+- Start the `competition_tier` derivation (men's IPL vs women's WBBL vs county T20) for fair cross-league comparisons.
+
+---
