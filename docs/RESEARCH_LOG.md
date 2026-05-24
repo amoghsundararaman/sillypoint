@@ -72,3 +72,45 @@ This file is the daily diary of the project. Every working session adds at least
 - After that: materialize combined Parquet for DuckDB queries.
 
 ---
+## 2026-05-23 (continued) — Schema locked
+
+**What I did:**
+- Wrote Pydantic schema (`sillypoint/ingestion/schema.py`, Layer 1) mirroring Cricsheet JSON.
+- Wrote breadth test (`scripts/test_schema_breadth.py`): parses one representative match per format.
+- Wrote random sample test (`scripts/test_schema_random.py`): parses 100 random matches with seed=42.
+- Result: 10/10 formats clean, 100/100 random sample clean.
+
+**What I decided:**
+- **Schema relaxations, each justified by observed data:**
+  - `Replacements` is a `{match: [...], role: [...]}` object (not flat list) — IPL impact-player rule, discovered on match 1529292.
+  - `info.season` accepts `str | int` — older Tests use bare int (`2011`), modern data uses `"2024/25"`.
+  - `event.group` accepts `str | int` — domestic competitions have both alphabetic ("A") and numeric (`1`) groups.
+  - `Fielder.name` optional — Cricsheet records fielding involvement without identity for some unnamed substitutes / incomplete domestic scoring.
+- **Schema versioning policy:** every relaxation gets a code comment explaining why. No preemptive loosening to `Any`.
+- **Reproducibility lock:** random test uses seed=42 always, so anyone re-running confirms the same 100 matches passed.
+
+**Open questions / next:**
+- Write `sillypoint/ingestion/parser.py` — transform validated Pydantic Match into the flat ~70-column delivery table for analytics.
+- Verify SRH match 1529292 parses to 235 first-innings runs *via the parser*, not just by summing Pydantic models.
+- Then scale to all 21,800 matches, one Parquet per match.
+
+---
+## 2026-05-23 (continued) — Full snapshot parsed, all 21,800 matches in Parquet
+
+**What I did:**
+- Implemented `DELIVERY_SCHEMA` in `sillypoint/ingestion/parser.py` — explicit Polars schema for ~90 columns, prevents type-inference flakiness on columns that are early-null (DRS reviews, wickets, list fields).
+- Implemented `scripts/parse_all_matches.py` — idempotent batch parser with progress bar and failures log.
+- Parsed all 21,800 matches: 21,791 succeeded initially.
+
+**What I decided:**
+- **Innings with no overs are valid data.** Discovered via 9 initial failures: forfeited / abandoned / rained-off innings. Most striking example: match 1160280, Central Stags vs Canterbury 2018, where both teams mutually forfeited their middle innings to engineer a contrived finish after rain washed out the first 2 days. Relaxed `Innings.overs` to `Field(default_factory=list)`.
+- **Empty rows from a match are also valid** — entirely abandoned matches produce zero rows. Removed the "fail if 0 rows" check; we write empty Parquets so downstream code knows the match existed.
+- **Schema in code, not inferred.** Explicit `DELIVERY_SCHEMA` is now the canonical specification. Any new column added to the parser must also be added here.
+
+**Open questions / next:**
+- Materialize combined Parquet for the full snapshot (one file with ~4M rows).
+- Load into DuckDB for first-class SQL queries.
+- Run sanity queries: total deliveries, per-format ball counts, top run-scorers all-time.
+- Verify the materialized Parquet matches per-match Parquets by row count and key sums.
+
+---
