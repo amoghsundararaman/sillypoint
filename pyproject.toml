@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sillypoint"
+version = "0.1.0"
+description = "A cricket analytics platform with a learned foundation model for ball-by-ball event sequences."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "Amogh Sundararaman", email = "amoghsundararaman@gmail.com"}
+]
+license = {text = "MIT"}
+
+[project.urls]
+Repository = "https://github.com/amoghsundararaman/sillypoint"
+
+[tool.setuptools.packages.find]
+include = ["sillypoint*"]
+exclude = ["tests*", "scripts*", "notebooks*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+ignore = ["E501"]  # line-too-long handled by formatter
