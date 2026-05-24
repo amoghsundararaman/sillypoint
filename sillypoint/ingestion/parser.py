@@ -19,8 +19,153 @@ happened next.'
 Enricher fields (weather, pitch, shot type, etc.) are populated as None
 by this parser and filled in later by dedicated enricher modules.
 """
-
+# Explicit column schema for the flat delivery table. Passing this to
+# Polars on construction prevents type-inference flakiness when early
+# rows happen to be all-null for columns that fill in later (DRS reviews,
+# wickets, etc.). It's also the canonical specification of what each
+# column means — keep this in sync with the row dict in _parse_innings.
 from __future__ import annotations
+import polars as pl
+
+DELIVERY_SCHEMA: dict[str, pl.DataType] = {
+    # Identifiers
+    "delivery_id": pl.Utf8,
+    "match_id": pl.Utf8,
+    "innings_idx": pl.Int32,
+    "over_idx": pl.Int32,
+    "delivery_idx_in_over": pl.Int32,
+    "legal_ball_in_over": pl.Int32,  # nullable
+    
+    # Match context
+    "match_date": pl.Date,
+    "match_type": pl.Utf8,
+    "venue": pl.Utf8,
+    "city": pl.Utf8,
+    "gender": pl.Utf8,
+    "event_name": pl.Utf8,
+    "season": pl.Utf8,
+    "batting_team": pl.Utf8,
+    "bowling_team": pl.Utf8,
+    
+    # Players
+    "batter": pl.Utf8,
+    "batter_id": pl.Utf8,
+    "non_striker": pl.Utf8,
+    "non_striker_id": pl.Utf8,
+    "bowler": pl.Utf8,
+    "bowler_id": pl.Utf8,
+    
+    # Ball outcome
+    "runs_batter": pl.Int32,
+    "runs_extras": pl.Int32,
+    "runs_total": pl.Int32,
+    "extras_wides": pl.Int32,
+    "extras_noballs": pl.Int32,
+    "extras_byes": pl.Int32,
+    "extras_legbyes": pl.Int32,
+    "extras_penalty": pl.Int32,
+    "is_legal_ball": pl.Boolean,
+    "is_wicket": pl.Boolean,
+    "wicket_kind": pl.Utf8,
+    "player_out": pl.Utf8,
+    "player_out_id": pl.Utf8,
+    "fielders_involved": pl.List(pl.Utf8),
+    
+    # Innings state
+    "runs_so_far_innings": pl.Int32,
+    "wickets_so_far_innings": pl.Int32,
+    "legal_balls_bowled_in_innings": pl.Int32,
+    "balls_remaining_in_innings": pl.Int32,
+    
+    # Striker/non-striker state
+    "striker_runs_so_far": pl.Int32,
+    "striker_balls_so_far": pl.Int32,
+    "striker_is_new": pl.Boolean,
+    "non_striker_runs_so_far": pl.Int32,
+    "non_striker_balls_so_far": pl.Int32,
+    
+    # Partnership
+    "partnership_runs_so_far": pl.Int32,
+    "partnership_balls_so_far": pl.Int32,
+    
+    # Bowler state
+    "bowler_runs_conceded_so_far": pl.Int32,
+    "bowler_wickets_so_far": pl.Int32,
+    "bowler_balls_bowled_so_far": pl.Int32,
+    "bowler_is_new_to_attack": pl.Boolean,
+    
+    # Chase context
+    "target": pl.Int32,
+    "runs_to_win": pl.Int32,
+    "required_run_rate": pl.Float64,
+    
+    # Phase
+    "phase": pl.Utf8,
+    "balls_into_phase": pl.Int32,
+    "overs_into_phase": pl.Int32,
+    "is_phase_transition": pl.Boolean,
+    "test_session": pl.Utf8,
+    "test_day": pl.Int32,
+    
+    # Over-level state
+    "over_runs_so_far": pl.Int32,
+    "over_legal_balls_so_far": pl.Int32,
+    "is_first_ball_of_over": pl.Boolean,
+    "is_last_ball_of_over": pl.Boolean,
+    
+    # Recent context
+    "last_ball_was_dot": pl.Boolean,
+    "last_ball_was_boundary": pl.Boolean,
+    "last_ball_was_wicket": pl.Boolean,
+    "runs_in_last_over": pl.Int32,
+    "wickets_in_last_over": pl.Int32,
+    
+    # Special states
+    "is_free_hit": pl.Boolean,
+    "is_super_over": pl.Boolean,
+    
+    # DRS state
+    "drs_reviews_remaining_batting": pl.Int32,
+    "drs_reviews_remaining_bowling": pl.Int32,
+    "review_taken": pl.Boolean,
+    "review_outcome": pl.Utf8,
+    "review_by": pl.Utf8,
+    
+    # Enricher-populated fields (typed even though always-null at parse time)
+    "venue_lat": pl.Float64,
+    "venue_lon": pl.Float64,
+    "temperature_c": pl.Float64,
+    "humidity_pct": pl.Float64,
+    "wind_speed_kmh": pl.Float64,
+    "wind_direction_deg": pl.Float64,
+    "precipitation_mm": pl.Float64,
+    "cloud_cover_pct": pl.Float64,
+    "dew_point_c": pl.Float64,
+    "dew_likely_score": pl.Float64,
+    "match_start_time_local": pl.Utf8,  # store as "HH:MM" string
+    "sunrise_local": pl.Utf8,
+    "sunset_local": pl.Utf8,
+    "is_day_session": pl.Boolean,
+    "is_night_session": pl.Boolean,
+    "is_twilight": pl.Boolean,
+    "venue_capacity": pl.Int32,
+    "crowd_attendance": pl.Int32,
+    "crowd_noise_db": pl.Float64,
+    "pitch_report_text": pl.Utf8,
+    "pitch_report_features": pl.Utf8,  # JSON-as-string for now
+    "pitch_type": pl.Utf8,
+    "bowler_style": pl.Utf8,
+    "bowler_pace_category": pl.Utf8,
+    "bowler_arm": pl.Utf8,
+    "bowler_spin_type": pl.Utf8,
+    "boundary_length_short_m": pl.Float64,
+    "boundary_length_long_m": pl.Float64,
+    "boundary_straight_m": pl.Float64,
+    "shot_played": pl.Utf8,
+    "shot_zone": pl.Utf8,
+    "field_positions": pl.Utf8,  # JSON-as-string for now
+}
+
 
 from datetime import date
 from typing import Any
@@ -32,6 +177,9 @@ from sillypoint.ingestion.schema import (
     Over,
     Wicket,
 )
+
+
+
 
 
 # Powerplay over boundaries by match type. Each entry maps a match type

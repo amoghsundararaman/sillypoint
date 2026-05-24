@@ -296,7 +296,7 @@ class Innings(CricsheetModel):
     """One innings. Limited-overs matches have 2 innings (plus super
     overs as additional entries if applicable). Tests have up to 4."""
     team: str
-    overs: list[Over] = Field(..., min_length=1)
+    overs: list[Over] = Field(default_factory=list)
     
     # Optional innings-level annotations
     powerplays: list[Powerplay] | None = None
